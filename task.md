@@ -1,0 +1,3 @@
+# GPT-5 Hackathon Task
+
+Our goal is to create an application that can generate a playable game from a user drawing. Our application should have a minimalist Figma interface for drawing the game characters. There should be a button that allows the generation of a background for the characters based on a 1 line text prompt. In addition, there should be an interface where the user can provide character abilities e.g. character can jump, shoot etc. This information should be sent to GPT-5 api which then uses a tool like https://e2b.dev/ to generate a playable game. The game should be playable in our canvas when a user toggles a button in the RightSideBar.
