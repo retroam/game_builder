@@ -215,8 +215,11 @@ export default function CanvasEditor({ onCharacterExtract }) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
-    // Work area background
-    ctx.fillStyle = "#fafafa";
+    // Work area background - subtle gradient
+    const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h)/2);
+    gradient.addColorStop(0, '#fafafa');
+    gradient.addColorStop(1, '#f1f5f9');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
 
     // Canvas frame area
@@ -288,9 +291,20 @@ export default function CanvasEditor({ onCharacterExtract }) {
       ctx.restore();
     }
 
-    // Border
-    ctx.strokeStyle = "#bbb";
-    ctx.strokeRect(vx - 0.5, vy - 0.5, vw + 1, vh + 1);
+    // Enhanced border with subtle shadow effect
+    ctx.shadowColor = "rgba(0,0,0,0.1)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(vx - 1, vy - 1, vw + 2, vh + 2);
+    
+    // Reset shadow
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
     ctx.restore();
   }
@@ -585,6 +599,50 @@ export default function CanvasEditor({ onCharacterExtract }) {
     }
   }
 
+  // Extract current frames into a game-ready character object and pass to parent
+  async function handleExtractCharacter() {
+    if (typeof onCharacterExtract !== "function") return;
+    try {
+      // Import extraction helpers
+      const {
+        extractCharacterFromFrames,
+        validateCharacterData,
+        createCharacterPreview,
+      } = await import("../../lib/characterExtraction.js");
+
+      const options = {
+        name: "Player",
+        abilities: {
+          jump: attrJump,
+          slide: attrSlide,
+          punch: attrPunch,
+          moveSpeed: 180,
+          jumpVelocity: 420,
+        },
+        spawn: { x: 100, y: Math.max(0, (currCanvas && currCanvas.height) || spriteH - 100) },
+      };
+
+      const character = await extractCharacterFromFrames(frames, current, options);
+
+      const errors = validateCharacterData(character);
+      if (errors && errors.length > 0) {
+        alert("Character extraction failed:\n" + errors.join("\n"));
+        return;
+      }
+
+      try {
+        character.preview = await createCharacterPreview(character, 64);
+      } catch (err) {
+        console.warn("createCharacterPreview failed", err);
+      }
+
+      onCharacterExtract(character);
+    } catch (err) {
+      console.error("handleExtractCharacter error:", err);
+      alert("Failed to extract character: " + (err?.message || err));
+    }
+  }
+
   // ------------------------------ UI Subcomponents (kept local for now) ------------------------------
   const Icon = {
     Pencil: (p) => (
@@ -683,8 +741,10 @@ export default function CanvasEditor({ onCharacterExtract }) {
     <button
       title={title}
       onClick={onClick}
-      className={`p-2 rounded-xl border ${
-        active ? "bg-black text-white border-black" : "bg-white text-black border-neutral-200 hover:border-neutral-400"
+      className={`p-3 rounded-xl border-2 transition-all duration-200 ${
+        active 
+          ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white border-blue-400 shadow-lg transform scale-105" 
+          : "bg-white/90 backdrop-blur-sm text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-white hover:shadow-md hover:transform hover:scale-105"
       } shadow-sm`}
     >
       {children}
@@ -743,17 +803,17 @@ export default function CanvasEditor({ onCharacterExtract }) {
         <div className="flex items-center gap-1 ml-2">
           <button
             onClick={undo}
-            className="px-2 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
+            className="px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm hover:border-blue-300 hover:bg-white hover:shadow-md transition-all duration-200"
             title="Undo (Ctrl/Cmd+Z)"
           >
-            <Icon.Undo className="w-4 h-4" />
+            <Icon.Undo className="w-4 h-4 text-blue-600" />
           </button>
           <button
             onClick={redo}
-            className="px-2 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
+            className="px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm hover:border-blue-300 hover:bg-white hover:shadow-md transition-all duration-200"
             title="Redo (Ctrl+Shift+Z)"
           >
-            <Icon.Redo className="w-4 h-4" />
+            <Icon.Redo className="w-4 h-4 text-blue-600" />
           </button>
         </div>
       </div>
@@ -807,7 +867,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
   );
 
   const LeftTools = () => (
-    <div className="flex flex-col gap-2 p-2 border-r border-neutral-200 bg-white">
+    <div className="flex flex-col gap-3 p-4 border-r border-white/20 bg-white/95 backdrop-blur-xl shadow-lg">
       <ToolButton title="Pencil (1)" active={tool === Tools.Pencil} onClick={() => setTool(Tools.Pencil)}>
         <Icon.Pencil className="w-5 h-5" />
       </ToolButton>
@@ -833,15 +893,15 @@ export default function CanvasEditor({ onCharacterExtract }) {
   );
 
   const RightPanel = () => (
-    <div className="w-64 border-l border-neutral-200 bg-white p-3 flex flex-col gap-3">
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-neutral-700">Properties</h3>
+    <div className="w-72 border-l border-white/20 bg-white/95 backdrop-blur-xl shadow-lg p-4 flex flex-col gap-4">
+      <section className="space-y-3">
+        <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">Properties</h3>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <label className="flex items-center gap-2 col-span-1">
             W
             <input
               type="number"
-              className="w-full px-2 py-1 border rounded-lg"
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white/90 focus:border-blue-400 focus:ring-0 transition-colors duration-200"
               value={spriteW}
               min={1}
               max={1024}
@@ -852,7 +912,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
             H
             <input
               type="number"
-              className="w-full px-2 py-1 border rounded-lg"
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-white/90 focus:border-blue-400 focus:ring-0 transition-colors duration-200"
               value={spriteH}
               min={1}
               max={1024}
@@ -867,7 +927,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
         </div>
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-neutral-700">Color</h3>
+        <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">Color</h3>
         <div className="flex items-center gap-2">
           <input
             type="color"
@@ -879,7 +939,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
             type="text"
             value={color}
             onChange={(e) => setColor(e.target.value)}
-            className="px-2 py-1 border rounded-lg w-full"
+            className="px-3 py-2 border-2 border-gray-200 rounded-lg w-full bg-white/90 focus:border-blue-400 focus:ring-0 transition-colors duration-200 font-mono"
           />
         </div>
         <div className="flex gap-1 flex-wrap">
@@ -900,7 +960,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
         </div>
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-neutral-700">Animation</h3>
+        <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">Animation</h3>
         <label className="flex items-center gap-2 text-sm">
           FPS
           <input type="range" min={1} max={24} value={fps} onChange={(e) => setFps(parseInt(e.target.value))} />
@@ -912,7 +972,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
         </label>
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-neutral-700">Character Attributes</h3>
+        <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">Character Attributes</h3>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={attrJump} onChange={(e) => setAttrJump(e.target.checked)} />
           Jump (Space)
@@ -927,7 +987,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
         </label>
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-neutral-700">Export</h3>
+        <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">Export</h3>
         <p className="text-xs text-neutral-500">
           PNG exports the current frame. Spritesheet exports a horizontal strip PNG and a JSON map.
         </p>
@@ -955,16 +1015,16 @@ export default function CanvasEditor({ onCharacterExtract }) {
       >
         <Icon.Trash className="w-4 h-4" /> Delete
       </button>
-      <div className="w-px h-6 bg-neutral-200 mx-1" />
+      <div className="w-px h-6 bg-gray-300 mx-2" />
       <button
         onClick={() => moveFrame(-1)}
-        className="px-2 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
+        className="px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm hover:border-blue-300 hover:bg-white hover:shadow-md transition-all duration-200 font-bold text-gray-700"
       >
         ←
       </button>
       <button
         onClick={() => moveFrame(1)}
-        className="px-2 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
+        className="px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm hover:border-blue-300 hover:bg-white hover:shadow-md transition-all duration-200 font-bold text-gray-700"
       >
         →
       </button>
@@ -974,9 +1034,11 @@ export default function CanvasEditor({ onCharacterExtract }) {
           <button
             key={i}
             onClick={() => setCurrent(i)}
-            className={`relative rounded-lg border ${
-              i === current ? "border-black" : "border-neutral-300 hover:border-neutral-500"
-            } bg-white p-1`}
+            className={`relative rounded-xl border-2 transition-all duration-200 ${
+              i === current 
+                ? "border-blue-500 shadow-lg ring-2 ring-blue-200 transform scale-105" 
+                : "border-gray-300 hover:border-blue-400 hover:shadow-md"
+            } bg-white p-2`}
           >
             <canvas
               width={Math.max(1, Math.min(96, spriteW * 2))}
@@ -992,7 +1054,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
               }}
               style={{ imageRendering: "pixelated" }}
             />
-            <span className="absolute -top-2 -right-2 text-[10px] bg-black text-white px-1 rounded">{i + 1}</span>
+            <span className="absolute -top-2 -right-2 text-[10px] bg-gradient-to-br from-blue-500 to-purple-600 text-white px-1.5 py-0.5 rounded-full font-bold shadow-md">{i + 1}</span>
           </button>
         ))}
       </div>
@@ -1001,7 +1063,7 @@ export default function CanvasEditor({ onCharacterExtract }) {
 
   // ------------------------------ Render ------------------------------
   return (
-    <div className="h-screen w-full grid grid-rows-[auto_1fr_auto] bg-neutral-50 text-neutral-900">
+    <div className="h-screen w-full grid grid-rows-[auto_1fr_auto] bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-gray-900">
       <Toolbar />
       <div className="grid grid-cols-[auto_1fr_auto] overflow-hidden">
         <LeftTools />
