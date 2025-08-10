@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@source "./index.html";
+@source "./src/**/*.{js,jsx,ts,tsx}";
+
+/* App baseline */
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+button {
+  cursor: pointer;
+}
