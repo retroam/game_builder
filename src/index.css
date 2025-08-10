@@ -1,6 +1,8 @@
-@import "tailwindcss";
-@source "./index.html";
-@source "./src/**/*.{js,jsx,ts,tsx}";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tell Tailwind where to look for classes via tailwind.config.js (already configured) */
 
 /* App baseline */
 html, body, #root {
@@ -8,8 +10,9 @@ html, body, #root {
 }
 
 body {
-  @apply bg-gray-50 text-gray-900;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background-color: #f9fafb;
+  color: #111827;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 button {

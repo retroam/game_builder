@@ -19,7 +19,7 @@ import { generateImageFromPrompt } from "../../lib/gptImage.js";
  * now depending on lib/* pure helpers. Behavior is preserved.
  */
 
-export default function CanvasEditor() {
+export default function CanvasEditor({ onCharacterExtract }) {
   // Sprite settings
   const [spriteW, setSpriteW] = useState(64);
   const [spriteH, setSpriteH] = useState(64);
@@ -718,48 +718,28 @@ export default function CanvasEditor() {
         >
           New Sprite
         </button>
-        <button
-          onClick={async () => {
-            const desc = prompt('Describe a background (e.g., "night sky with stars", "sunset mountains", "city skyline")');
-            if (desc) await applyBackgroundFromDescription(desc, "behind");
-          }}
-          className="px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
-        >
-          Background
-        </button>
-        <button
-          onClick={async () => {
-            const desc = prompt('Describe an AI background (e.g., "lush forest concept art in watercolor")');
-            if (!desc) return;
-            // Will fall back to the procedural generator automatically on any error
-            await applyBackgroundFromAI(desc, "cover");
-          }}
-          className="px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
-          title="Generate with GPT-5 (falls back to procedural if unavailable)"
-        >
-          AI BG
-        </button>
-        <button
-          onClick={async () => {
-            // Fixed prompt to verify fallback behavior without requiring an API key.
-            // If the AI call fails, applyBackgroundFromAI will fall back to the procedural generator.
-            await applyBackgroundFromAI("fantasy forest concept art", "cover");
-          }}
-          className="px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
-          title="Test AI fallback (no prompt; uses fixed text)"
-        >
-          AI BG Test
-        </button>
-        <button
-          onClick={async () => {
-            // Deterministic generator smoke test (no prompts)
-            await applyBackgroundFromDescription("sunset mountains", "replace");
-          }}
-          className="px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-400"
-          title="Deterministic BG test (no prompt)"
-        >
-          BG Test
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              const desc = prompt('Describe a background (e.g., "sunset mountains", "space nebula")');
+              if (desc) await applyBackgroundFromDescription(desc, "behind");
+            }}
+            className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-sm"
+          >
+            Background
+          </button>
+          <button
+            onClick={async () => {
+              const desc = prompt('Describe an AI background (e.g., "lush forest concept art")');
+              if (!desc) return;
+              await applyBackgroundFromAI(desc, "cover");
+            }}
+            className="px-2 py-1 rounded border bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm"
+            title="AI Generate (requires API key)"
+          >
+            AI Generate
+          </button>
+        </div>
         <div className="flex items-center gap-1 ml-2">
           <button
             onClick={undo}
@@ -813,6 +793,15 @@ export default function CanvasEditor() {
         >
           Spritesheet
         </button>
+        {onCharacterExtract && (
+          <button
+            onClick={handleExtractCharacter}
+            className="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+            title="Extract current frame as a game character"
+          >
+            🎮 Extract Character
+          </button>
+        )}
       </div>
     </div>
   );
