@@ -1,145 +1,424 @@
-# GPT-5 Hackathon Task
 
-Goal: Build a minimal app that turns a user’s sketch into a playable web game in minutes.
+# GPT‑5 Hackathon Task (Phaser Edition)
+
+Goal: Turn a user sketch into a playable Phaser 3 web game in minutes.
 
 Assumptions (MVP):
-- One level, 1–2 characters, 2D platformer-lite.
-- Desktop Chrome/Edge/Firefox; keyboard only (no mobile).
-- Static bundle preferred; server runtime used only as fallback/demo.
+
+* One level, 1–2 characters, 2D platformer‑lite.
+* Desktop Chrome/Edge/Firefox; keyboard only (no mobile).
+* Pure static hosting (no compile step required); server used only for GPT‑5 codegen and optional background generation.
 
 ## MVP Flow
-- Draw character shapes on a simple canvas.
-- Enter a 1-line prompt to generate a background.
-- Assign basic abilities to a selected character.
-- Click “Generate Game” and toggle “Play” to try it in-canvas.
 
-De-scopes (to hit demo):
-- No remappable controls, no save/gallery, no multi-scene.
-- Background “variant pick” optional; single best image acceptable.
+* Draw character(s) on a simple canvas; export PNGs (≤ 3).
+* Draw a few rectangle **platforms** (mandatory; 2–4 is enough).
+* Enter a 1‑line background prompt (or upload/preset).
+* Assign basic abilities to the selected character.
+* Click **Generate Game** → GPT‑5 returns code + manifest; click **Play** to run it in an iframe.
+
+De‑scopes (to hit demo):
+
+* No remappable controls, save/gallery, multi‑scene, or enemy AI.
+* Background “variant pick” optional.
 
 ## UI (Simple)
-- Canvas centered; left toolbar: Select, Brush, Erase, Undo/Redo, Zoom.
-- Right sidebar with two tabs:
-  - Edit: Background prompt + button; Character list + Abilities.
-  - Play: “Generate Game” button, short status, Play toggle.
-- Minimal mode toggle: Edit ↔ Play (or just the Play toggle).
-- Basic snap-to-grid (on/off) and bounding-box handles.
-- Iframe focus hint: when Play is on, auto-focus the iframe; show a tip if keys don’t respond; prevent page scroll on arrows/space.
+
+* Center canvas; left toolbar: Select, Brush, Erase, Rect (platform), Undo/Redo, Zoom.
+* Right sidebar tabs:
+
+  * **Edit:** Background prompt (or upload), Character list, Abilities sliders.
+  * **Play:** “Generate Game” button, short status, Play toggle, Reset button.
+* Minimal mode toggle (Edit ↔ Play) or just a Play toggle that disables Edit tools.
+* Snap‑to‑grid (on/off, size slider) and bounding‑box handles.
+* Iframe focus hint: on Play, auto‑focus the iframe; show a tip if keys don’t respond; prevent page scroll on arrows/space while Play is active.
 
 ## Abilities (MVP)
-- Move Left/Right: speed slider maps to `moveSpeed` (px/s).
-- Jump: height slider maps to `jumpVelocity` (px/s upward).
-- Optional Shoot (if time): `projectileSpeed` (px/s) + `cooldownMs`.
-- Controls fixed to Arrow keys + Space (no custom mapping).
+
+* **Move Left/Right:** `moveSpeed` (px/s).
+* **Jump:** `jumpVelocity` (px/s upward).
+* **Optional Shoot:** `projectileSpeed` (px/s) + `cooldownMs`. (Bound to `X` if present.)
+* Controls fixed: Arrow keys + Space (jump), `R` to reset, optional `X` to shoot.
 
 ## Background (Simple)
-- 1-line text prompt input.
-- Generate once → prefer single image; up to 2 variants if trivial.
-- Output: background `imageUrl` (PNG/JPEG, 16:9, ~1280×720 recommended).
-- Recent prompt history: last 1 item only (client-side).
 
-## Generation & Runtime (Minimal)
-- Primary engine: “pygame-web (via pygbag)”.
-- Build: generator produces `main.py` + assets; build with `pygbag` to a static web bundle (`index.html` + WASM + assets).
-- Async API with job queue: return `id` on submit; poll for status and `bundleUrl`.
-- Status values: `queued` → `building` → `ready` | `failed` (no streaming logs).
-
-### Alternative Runtime (In Scope)
-- e2b server runtime: launch a short-lived Python server (FastAPI) in e2b for preview.
-- Endpoints: start runtime → returns `runtimeUrl`; stop runtime; status.
-- Client: load a minimal web client in iframe that talks to the runtime (HTTP/SSE). Use only if static bundle is unavailable or for demo purposes.
-
-## Play Mode
-- In-canvas iframe loads `bundleUrl`.
-- Quick “Reset” button to restart the level.
-- Keyboard focus captured by the iframe; show tooltip if focus lost.
-
-## Deployment
-- Main app backend can run on Modal (Python FastAPI), exposing the `/api/games` build endpoint and proxying to e2b.
-- Frontend as static hosting (e.g., Vercel/Netlify) or served by the Modal app.
-- Store build artifacts on temporary storage (e2b artifact URL or object store) and reference via `bundleUrl`.
-- Set COOP/COEP and compression (gzip/brotli) for WASM performance; long cache headers on immutable artifacts.
-- Artifacts expire after 24–72h (configurable TTL); serve via signed URLs if needed.
-
-## Acceptance Criteria
-- Create at least one character and assign Move + Jump (with visible effect on speed/jump).
-- Background image generated and used as level background.
-- Submitting a build returns a job `id`; polling reaches `ready` and provides `bundleUrl` within ~60–90s wall-clock.
-- Play mode runs in-app; Arrow keys move, Space jumps; Reset re-initializes the level.
-- Alternative path: start e2b runtime and load client in iframe → character responds to controls.
-
-## Nice-to-Haves (Time Permitting)
-- Simple Layers list: reorder + hide/show.
-- Parallax toggle with 2 depth layers.
-- Simple collider editor: rectangle only.
+* 1‑line text prompt or upload/preset.
+* Prefer a single image; 16:9, \~1280×720 (JPEG/WebP; PNG if transparency is needed).
+* Last prompt only (client‑side).
 
 ---
 
-## Data Contracts
+# Generation & Runtime (Phaser)
+
+### Runtime
+
+* **Engine:** Phaser 3 with Arcade Physics (no bundler).
+* **Delivery:** Static artifact = `index.html` + `game.js` (+ image assets).
+* **Load:** Host app embeds artifact in an iframe (`bundleUrl`).
+* **Perf:** No compile step; loads immediately on warm cache.
+
+### Codegen model
+
+* **Stable core:** We ship a tiny, audited Phaser harness.
+* **GPT‑5 output:** Fills a scene config + scene glue code (safe insertion points only).
+* **Guardrails:** We validate numeric ranges, image URLs, and arrays before writing files. No `eval`, no dynamic imports from user strings, no network beyond asset URLs we whitelist.
+
+---
+
+# Data Contracts
 
 ### Character
+
 ```jsonc
 {
   "id": "char-1",
   "name": "Hero",
-  "imageUrl": "https://cdn/.../hero.png", // or imageData: data: URI (PNG)
-  "collider": [ { "x": 10, "y": 22, "w": 48, "h": 64 } ],
+  "imageUrl": "https://cdn/.../hero.png", // or data: URI PNG
+  "collider": { "w": 48, "h": 64, "offsetX": 0, "offsetY": 0 }, // optional; defaults to image size
   "abilities": {
-    "moveSpeed": 180,           // px/s
-    "jumpVelocity": 420,        // px/s upward
-    "shoot": {                  // optional
-      "projectileSpeed": 600,   // px/s
+    "moveSpeed": 180,        // px/s
+    "jumpVelocity": 420,     // px/s upward
+    "shoot": {               // optional
+      "projectileSpeed": 600,
       "cooldownMs": 300
     }
-  }
+  },
+  "spawn": { "x": 100, "y": 520 }
+}
+```
+
+### Level / Scene
+
+```jsonc
+{
+  "world": { "width": 1280, "height": 720, "gravity": 1400 },
+  "background": { "imageUrl": "https://cdn/.../bg.jpg", "fit": "cover" }, // "cover" or "stretch"
+  "platforms": [ { "x": 0, "y": 640, "w": 1280, "h": 80 }, { "x": 320, "y": 520, "w": 320, "h": 24 } ],
+  "targets": [ { "x": 900, "y": 580, "w": 40, "h": 40, "type": "coin" } ], // optional
+  "characters": [ /* Character[] */ ],
+  "controls": { "arrows": true, "spaceJump": true, "resetKey": "R", "shootKey": "X" }
 }
 ```
 
 ### POST /api/games (submit build)
-Request body
+
+Request
+
 ```jsonc
 {
-  "characters": [ /* Character[] as above */ ],
-  "background": { "imageUrl": "https://cdn/.../bg.png", "prompt": "sunset hills" },
+  "scene": { /* Level/Scene as above */ },
+  "engine": "phaser",
   "grid": { "enabled": true, "size": 8 },
-  "engine": "pygbag" // or "e2b" fallback
+  "assets": { "inline": false } // if true, generator inlines data URIs into game.js
 }
 ```
+
 Response
+
 ```jsonc
 { "id": "job_123", "status": "queued" }
 ```
 
-### GET /api/games/:id (poll status)
-Response
+### GET /api/games/\:id (poll)
+
 ```jsonc
 {
   "id": "job_123",
-  "status": "queued" | "building" | "ready" | "failed",
-  "bundleUrl": "https://cdn/.../index.html", // present when ready
-  "etaSeconds": 30,                            // optional
-  "error": "build failed: ..."                // on failure
+  "status": "ready" | "queued" | "building" | "failed",
+  "bundleUrl": "https://cdn/.../index.html", // set when ready
+  "etaSeconds": 5,                            // optional
+  "errors": [ { "code": "asset_cors", "msg": "Background blocked by CORS" } ] // on failure
 }
 ```
 
-### Generator Output
-- Files: `main.py`, `assets/characters/<id>.png`, `assets/bg.png`.
-- Physics: simple gravity, ground plane, horizontal accel; jump only when on ground.
-- Controls: ArrowLeft/ArrowRight, Space; `R` to reset (and a UI Reset button).
+---
 
-## Build Orchestration
-- Queue on submit; immediate response with `id`.
-- Timeouts: queue wait ≤ 15s; build ≤ 90s; 1 retry on transient failure.
-- Logs stored server-side; return short `error` string only.
-- Artifact hosting: object store/CDN; immutable URLs with cache headers; TTL 24–72h.
+# Generator Output (Phaser)
 
-## Constraints & Guardrails
-- Canvas export target: up to 1280×720; DPR-aware; PNG with alpha.
-- Image limits: ≤ 1 MB per PNG; ≤ 3 character images for MVP.
-- CORS restricted to frontend origin; rate limit submits per IP.
-- No PII in payloads; prompts logged with redaction if stored.
+* Files:
 
-## Testing Strategy (Minimal)
-- Unit: abilities → codegen mapping; collider conversion.
-- Integration: build with stub assets (no external model calls).
-- Smoke: load WASM bundle headlessly; send keys and assert movement.
+  * `index.html` (loads Phaser from CDN, mounts the game)
+  * `game.js` (generated by GPT‑5 from the `scene` spec)
+  * `assets/*` (optional; or use remote URLs)
+* Physics: gravity, static rectangle platforms, AABB collisions, jump only when grounded.
+* Controls: ArrowLeft/Right to move, Space to jump, `R` to reset. Optional `X` to shoot.
+* Reset: button in host UI calls `iframe.contentWindow.postMessage({type:'reset'})`.
+
+---
+
+# Play Mode
+
+* Iframe loads `bundleUrl`.
+* **Reset** button to restart the level.
+* Keyboard focus captured by the iframe; host page prevents scrolling on arrows/space while Play is on.
+* Same‑site or proper CORS (`Access-Control-Allow-Origin`) on assets to avoid tainting.
+
+---
+
+# Deployment
+
+* Backend on Modal (FastAPI) or similar to proxy GPT‑5 and build artifacts.
+* Frontend static hosting (Vercel/Netlify).
+* Artifacts to object storage/CDN with long cache on immutable URLs.
+* TTL 24–72h via signed URLs.
+
+---
+
+# Acceptance Criteria
+
+* User creates ≥1 character and places ≥2 platforms.
+* Background image present (generated, preset, or uploaded).
+* Movement sliders visibly change run speed and jump height (can reach a raised platform).
+* “Generate Game” returns a `bundleUrl` and Play loads in under \~5 seconds on a warm path.
+* Reset reinitializes the level. Optional: coin/target can be collected.
+
+---
+
+# Constraints & Guardrails
+
+* Canvas export target ≤ 1280×720; DPR‑aware; PNG with alpha.
+* Backgrounds ≤ 1.5 MB JPEG/WebP; sprites ≤ 1 MB PNG.
+* ≤ 3 character images for MVP.
+* CORS restricted to frontend origin; rate‑limit submits per IP.
+* Strip PII; redact prompts if stored.
+* No eval/Function; only whitelisted Phaser APIs; clamp numeric ranges.
+
+---
+
+# Testing (Minimal)
+
+* Unit: sliders → numeric clamps; collider conversion; “fit: cover” math.
+* Integration: Playwright loads game, sends keys, asserts x/y after N frames; verifies jump apex tolerance.
+* Asset failure: broken URL falls back to placeholder, game still runs.
+* Focus/scroll: ArrowDown doesn’t scroll page during Play.
+
+---
+
+# What GPT‑5 Should Generate
+
+Below is the **template shape** GPT‑5 should output for each game. Keep the engine tiny; GPT‑5 fills the config + optional scene glue.
+
+### `index.html` (template the generator fills)
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sketch Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body { margin:0; height:100%; background:#111; }
+    #game { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    canvas { outline:none; }
+    .hint { position:fixed; bottom:12px; left:12px; color:#bbb; font:12px/1.4 system-ui; }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <div class="hint">Arrows move • Space jumps • R resets</div>
+
+  <!-- Phaser via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+
+  <!-- Game code (generated) -->
+  <script src="./game.js"></script>
+
+  <script>
+    // Reset support from parent
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'reset' && window.__levelScene) {
+        window.__levelScene.scene.restart();
+      }
+    }, false);
+  </script>
+</body>
+</html>
+```
+
+### `game.js` (example GPT‑5 output)
+
+> GPT‑5 emits one self‑contained file that:
+>
+> 1. defines `SCENE`, 2) builds a Phaser scene from it, 3) maps abilities.
+
+```js
+/* ==== GENERATED BY GPT‑5 ==== */
+const SCENE = {
+  world: { width: 1280, height: 720, gravity: 1400 },
+  background: { imageUrl: "https://picsum.photos/1280/720?blur=1", fit: "cover" },
+  platforms: [
+    { x: 0, y: 660, w: 1280, h: 60 },
+    { x: 320, y: 520, w: 320, h: 24 }
+  ],
+  targets: [ { x: 950, y: 600, w: 28, h: 28, type: "coin" } ],
+  characters: [{
+    id: "char-1",
+    name: "Hero",
+    imageUrl: "https://your-cdn/hero.png",
+    collider: { w: 48, h: 64, offsetX: 0, offsetY: 0 },
+    abilities: { moveSpeed: 180, jumpVelocity: 420 },
+    spawn: { x: 120, y: 560 }
+  }],
+  controls: { arrows: true, spaceJump: true, resetKey: "R", shootKey: "X" }
+};
+
+/* ==== ENGINE GLUE (kept tiny & audited) ==== */
+(function () {
+  const W = SCENE.world.width, H = SCENE.world.height;
+
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    parent: 'game',
+    physics: { default: 'arcade', arcade: { gravity: { y: SCENE.world.gravity }, debug: false } },
+    scene: { preload, create, update }
+  });
+
+  let cursors, keyR, keyShoot, player, facing = 1, canShootAt = 0;
+  let platformsGroup, bulletsGroup, targetsGroup, bgImage;
+
+  function preload() {
+    // Allow cross-origin images (server must send CORS headers)
+    this.load.image('bg', SCENE.background.imageUrl);
+    this.load.image('hero', SCENE.characters[0].imageUrl);
+
+    // 1x1 white texture for rectangles (platforms, bullets, targets)
+    const g = this.add.graphics();
+    g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 1, 1);
+    g.generateTexture('pixel', 1, 1); g.destroy();
+  }
+
+  function create() {
+    // Background
+    bgImage = this.add.image(0, 0, 'bg').setOrigin(0, 0);
+    fitBackground(bgImage, SCENE.background.fit || 'cover', this.scale.width, this.scale.height);
+
+    // Platforms
+    platformsGroup = this.physics.add.staticGroup();
+    SCENE.platforms.forEach(p => {
+      const s = platformsGroup.create(p.x + p.w / 2, p.y + p.h / 2, 'pixel').setDisplaySize(p.w, p.h);
+      s.refreshBody();
+      s.setVisible(false); // flip true for debug
+    });
+
+    // Targets (optional)
+    targetsGroup = this.physics.add.staticGroup();
+    (SCENE.targets || []).forEach(t => {
+      const s = targetsGroup.create(t.x + t.w / 2, t.y + t.h / 2, 'pixel').setDisplaySize(t.w, t.h);
+      s.refreshBody();
+      s.setTint(0xffd54f).setAlpha(0.9); // small visual cue
+    });
+
+    // Player
+    const hero = SCENE.characters[0];
+    player = this.physics.add.sprite(hero.spawn.x, hero.spawn.y, 'hero');
+    player.setCollideWorldBounds(true);
+    if (hero.collider) {
+      player.body.setSize(hero.collider.w, hero.collider.h);
+      player.setOffset(hero.collider.offsetX || 0, hero.collider.offsetY || 0);
+    }
+    player.setBounce(0);
+
+    // Collisions
+    this.physics.add.collider(player, platformsGroup);
+    this.physics.add.overlap(player, targetsGroup, (_p, target) => {
+      target.destroy();
+      // simple win text
+      const s = this.add.text(W / 2, 60, 'Collected!', { fontFamily: 'system-ui', fontSize: 24, color: '#fff' }).setOrigin(0.5);
+      this.time.delayedCall(1000, () => s.destroy());
+    });
+
+    // Bullets (optional shoot)
+    bulletsGroup = this.physics.add.group({ maxSize: 24 });
+    this.physics.add.collider(bulletsGroup, platformsGroup, (b) => b.destroy());
+    this.physics.add.overlap(bulletsGroup, targetsGroup, (b, t) => { b.destroy(); t.destroy(); });
+
+    // Input
+    cursors = this.input.keyboard.createCursorKeys();
+    keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    keyShoot = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+
+    // Expose for parent reset
+    window.__levelScene = this;
+
+    // Prevent page scroll when focused
+    this.input.keyboard.addCapture([Phaser.Input.Keyboard.KeyCodes.LEFT, Phaser.Input.Keyboard.KeyCodes.RIGHT, Phaser.Input.Keyboard.KeyCodes.SPACE]);
+  }
+
+  function update(time, delta) {
+    const hero = SCENE.characters[0];
+    const speed = clamp(hero.abilities.moveSpeed, 50, 800);
+    const jumpV = -clamp(hero.abilities.jumpVelocity, 100, 1500);
+
+    // Horizontal movement
+    if (cursors.left.isDown) {
+      player.setVelocityX(-speed);
+      facing = -1; player.setFlipX(true);
+    } else if (cursors.right.isDown) {
+      player.setVelocityX(speed);
+      facing = 1; player.setFlipX(false);
+    } else {
+      player.setVelocityX(0);
+    }
+
+    // Jump
+    const grounded = player.body.blocked.down || player.body.touching.down;
+    if (Phaser.Input.Keyboard.JustDown(cursors.space) && grounded) {
+      player.setVelocityY(jumpV);
+    }
+
+    // Reset
+    if (Phaser.Input.Keyboard.JustDown(keyR)) {
+      this.scene.restart();
+      return;
+    }
+
+    // Shoot (optional)
+    const shoot = hero.abilities.shoot;
+    if (shoot && Phaser.Input.Keyboard.JustDown(keyShoot) && time >= canShootAt) {
+      fireBullet.call(this, player.x + facing * (hero.collider ? hero.collider.w / 2 : 20), player.y - 10, facing, shoot);
+      canShootAt = time + clamp(shoot.cooldownMs, 80, 2000);
+    }
+  }
+
+  function fireBullet(x, y, dir, shoot) {
+    const b = bulletsGroup.get(x, y, 'pixel');
+    if (!b) return;
+    b.setActive(true).setVisible(true).setDisplaySize(8, 3);
+    b.body.allowGravity = false;
+    b.setVelocityX(dir * clamp(shoot.projectileSpeed, 100, 2000));
+    b.setTint(0xff6d6d);
+    this.time.delayedCall(2000, () => { if (b.active) b.destroy(); });
+  }
+
+  function fitBackground(img, mode, w, h) {
+    if (mode === 'stretch') { img.setDisplaySize(w, h); return; }
+    const tex = img.texture.getSourceImage();
+    const sx = w / tex.width, sy = h / tex.height, s = Math.max(sx, sy);
+    img.setScale(s).setPosition(0, 0).setOrigin(0, 0);
+  }
+
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+})();
+```
+
+---
+
+# How GPT‑5 maps UI → Code
+
+* **Platforms drawn in the editor** → become `SCENE.platforms[]` (rects).
+* **Character PNG(s)** → `SCENE.characters[0].imageUrl` with optional collider box from the editor.
+* **Sliders** → `moveSpeed` and `jumpVelocity` numbers (clamped by the engine glue).
+* **Optional shoot** → emits `abilities.shoot` and the engine enables the `X` key path automatically.
+* **Background prompt** → if generation succeeds, use the URL; else fall back to uploaded/preset.
+
+---
+
+# Host App Notes
+
+* Serve artifact and host from the same site when possible (simplifies CORS/focus).
+* When Play toggles **on**, call `iframe.contentWindow.focus()` and add `keydown` listeners on the host to `preventDefault()` for Arrow/Space while Play is active.
+* Provide a friendly “Use Chrome/Edge/Firefox” message if Safari chokes.
+
